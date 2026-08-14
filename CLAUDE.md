@@ -59,6 +59,31 @@ npm run test:debug
 npm run test:e2e
 ```
 
+## Docker
+
+El proyecto corre en local vía Docker Compose: un contenedor `api` (Node 24, definido en `docker/Dockerfile`) con hot-reload (`npm run start:dev` montando el código como volumen), `mysql` (MySQL 8), `redis` (Redis 8) y `mailpit` (SMTP + UI de correo para desarrollo). Cada servicio con estado persiste sus datos en un volumen propio (`mysql_data`, `redis_data`, `mailpit_data`).
+
+```bash
+# copiar variables de entorno (una sola vez)
+cp .env.example .env
+
+# levantar api + mysql
+docker compose up
+
+# reconstruir la imagen tras cambiar package.json
+docker compose up --build
+
+# apagar y limpiar contenedores
+docker compose down
+
+# apagar y borrar también los datos de mysql
+docker compose down -v
+```
+
+- Variables de entorno en `.env` (no versionado; ver `.env.example`). `DATABASE_URL` y `REDIS_URL` usan `mysql`/`redis` como host porque son los nombres de los servicios en `docker-compose.yml`; Mailpit expone SMTP en `mailpit:1025` y su UI web en `http://localhost:8025`.
+- El servicio `api` monta `.:/app` con un volumen anónimo en `/app/node_modules` para que las dependencias instaladas en la imagen no sean pisadas por el bind mount del host.
+- Los healthchecks de `mysql` y `redis` bloquean el arranque de `api` (`depends_on: condition: service_healthy`) hasta que ambos estén listos; `mailpit` solo espera a que el contenedor haya iniciado (`condition: service_started`).
+
 ## Arquitectura
 
 - Punto de entrada: `src/main.ts` — crea la app Nest vía `NestFactory.create(AppModule)` y escucha en `process.env.PORT ?? 3000`.
