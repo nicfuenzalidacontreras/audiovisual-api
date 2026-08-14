@@ -5,3 +5,528 @@ generator client {
 datasource db {
   provider = "mysql"
 }
+
+// ============================================================
+//  ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  PHOTOGRAPHER
+  ASSISTANT
+}
+
+enum ProjectType {
+  WEDDING
+  SESSION
+  EVENT
+  CORPORATE
+  PRODUCT
+  OTHER
+}
+
+enum ProjectStatus {
+  PROSPECT
+  CONFIRMED
+  EDITING
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum TokenType {
+  PRIMARY // the client: sees everything, downloads originals
+  PUBLIC // shareable: watermarked previews only
+}
+
+enum AssetType {
+  PHOTO
+  VIDEO
+}
+
+enum AssetStatus {
+  PENDING // uploaded, not processed yet
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum SelectionType {
+  FAVORITE
+  REJECTED
+}
+
+enum DownloadType {
+  ORIGINAL
+  PREVIEW
+  ZIP
+}
+
+enum EventType {
+  PHOTO_VIEW
+  VIDEO_PLAY
+  ZIP_REQUESTED
+  SHARED
+}
+
+// ============================================================
+//  USERS  (the studio team, not the clients)
+// ============================================================
+
+model User {
+  id            String    @id @default(uuid(7)) @db.Char(36)
+  email         String    @unique @db.VarChar(180)
+  password      String    @db.VarChar(255) // argon2
+  name          String    @db.VarChar(120)
+  role          UserRole  @default(PHOTOGRAPHER)
+  is_active     Boolean   @default(true)
+  last_login_at DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime? // soft delete
+
+  projects Project[]
+  quotes   Quote[]
+
+  @@map("users")
+}
+
+// ============================================================
+//  CRM
+// ============================================================
+
+model Client {
+  id    String  @id @default(uuid(7)) @db.Char(36)
+  name  String  @db.VarChar(160)
+  // Chilean tax ID, normalized without dots or dash: "176543210" / "12345678K"
+  rut   String? @unique @db.VarChar(12)
+  email String? @db.VarChar(180)
+  phone String? @db.VarChar(30)
+  notes String? @db.Text
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime? // soft delete
+
+  projects Project[]
+  quotes   Quote[]
+
+  @@index([name])
+  @@index([email])
+  @@index([deleted_at])
+  @@map("clients")
+}
+
+model Project {
+  id         String        @id @default(uuid(7)) @db.Char(36)
+  client_id  String        @db.Char(36)
+  user_id    String?       @db.Char(36) // person in charge
+  name       String        @db.VarChar(180)
+  type       ProjectType   @default(OTHER)
+  status     ProjectStatus @default(PROSPECT)
+  event_date DateTime?     @db.Date
+  venue      String?       @db.VarChar(200)
+  notes      String?       @db.Text
+
+  // Consent — collect BEFORE publishing anything
+  allows_publishing  Boolean   @default(false)
+  allows_minors      Boolean   @default(false)
+  consent_granted_at DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  client Client @relation(fields: [client_id], references: [id], onDelete: Restrict)
+  user   User?  @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  galleries       Gallery[]
+  assets          Asset[]
+  quotes          Quote[]
+  pending_uploads PendingUpload[]
+
+  @@index([client_id, status])
+  @@index([event_date])
+  @@index([status])
+  @@map("projects")
+}
+
+// ============================================================
+//  QUOTES
+// ============================================================
+
+model Quote {
+  id         String  @id @default(uuid(7)) @db.Char(36)
+  client_id  String  @db.Char(36)
+  project_id String? @db.Char(36)
+  user_id    String? @db.Char(36)
+
+  // Yearly sequence: 2026-0001. Never reused, not even when voided.
+  year   Int
+  number Int
+
+  status QuoteStatus @default(DRAFT)
+
+  // Frozen at issue time: if the VAT rate changes, old quotes stay put.
+  subtotal Decimal @db.Decimal(14, 2)
+  tax_rate Decimal @default(19.00) @db.Decimal(5, 2)
+  tax      Decimal @db.Decimal(14, 2)
+  discount Decimal @default(0) @db.Decimal(14, 2)
+  total    Decimal @db.Decimal(14, 2)
+  currency String  @default("CLP") @db.VarChar(3)
+
+  valid_until    DateTime? @db.Date
+  terms          String?   @db.Text
+  internal_notes String?   @db.Text
+
+  sent_at      DateTime?
+  responded_at DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime? // soft delete
+
+  client  Client   @relation(fields: [client_id], references: [id], onDelete: Restrict)
+  project Project? @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  items QuoteItem[]
+
+  @@unique([year, number])
+  @@index([client_id, status])
+  @@index([status, valid_until])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String  @id @default(uuid(7)) @db.Char(36)
+  quote_id    String  @db.Char(36)
+  position    Int     @default(0)
+  description String  @db.VarChar(255)
+  details     String? @db.Text
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unit_price  Decimal @db.Decimal(14, 2)
+  line_total  Decimal @db.Decimal(14, 2)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  quote Quote @relation(fields: [quote_id], references: [id], onDelete: Cascade)
+
+  @@index([quote_id, position])
+  @@map("quote_items")
+}
+
+// ============================================================
+//  ASSETS
+//  Assets belong to the PROJECT, not to a gallery: the same file can
+//  appear in the full gallery, the sneak-peek gallery and the public
+//  portfolio without duplicating rows or R2 objects.
+// ============================================================
+
+model Asset {
+  id         String      @id @default(uuid(7)) @db.Char(36)
+  project_id String      @db.Char(36)
+  type       AssetType
+  status     AssetStatus @default(PENDING)
+
+  original_filename String @db.VarChar(255)
+  mime_type         String @db.VarChar(100)
+
+  // R2 object keys. Never URLs: those are signed on demand.
+  key_original String  @db.VarChar(500)
+  key_thumb    String? @db.VarChar(500)
+  key_preview  String? @db.VarChar(500) // watermarked
+  key_poster   String? @db.VarChar(500) // cover frame for video
+
+  // BigInt: a 5 GB 4K video overflows INT.
+  // Remember the BigInt.toJSON patch in main.ts.
+  size_bytes BigInt
+
+  width            Int?
+  height           Int?
+  duration_seconds Int?
+  checksum         String? @db.VarChar(64) // sha256, duplicate detection
+
+  // External streaming provider id, if used (Cloudflare Stream / Vimeo)
+  external_video_id String? @db.VarChar(120)
+
+  captured_at   DateTime? // EXIF DateTimeOriginal
+  process_error String?   @db.Text
+
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  processed_at DateTime?
+  deleted_at   DateTime?
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  galleries  GalleryAsset[]
+  selections Selection[]
+  downloads  Download[]
+  events     GalleryEvent[]
+
+  @@index([project_id, status])
+  @@index([status, created_at]) // processing queue
+  @@index([checksum])
+  @@map("assets")
+}
+
+// ============================================================
+//  GALLERIES
+// ============================================================
+
+model Gallery {
+  id         String @id @default(uuid(7)) @db.Char(36)
+  project_id String @db.Char(36)
+
+  // nanoid(12) — never sequential ids in a public URL
+  slug  String @unique @db.VarChar(24)
+  title String @db.VarChar(180)
+
+  welcome_message String? @db.Text
+  cover_asset_id  String? @db.Char(36) // used for the Open Graph preview
+
+  // Optional password, on top of the token
+  password_hash String? @db.VarChar(255)
+
+  allows_selections Boolean @default(true)
+  allows_zip        Boolean @default(true)
+  selection_limit   Int?
+
+  published_at DateTime?
+  expires_at   DateTime?
+  archived_at  DateTime?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime? // soft delete
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  tokens    GalleryToken[]
+  assets    GalleryAsset[]
+  sessions  GallerySession[]
+  downloads Download[]
+  stats     GalleryStats?
+
+  @@index([project_id])
+  @@index([expires_at])
+  @@map("galleries")
+}
+
+model GalleryAsset {
+  gallery_id  String  @db.Char(36)
+  asset_id    String  @db.Char(36)
+  position    Int     @default(0)
+  is_featured Boolean @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  gallery Gallery @relation(fields: [gallery_id], references: [id], onDelete: Cascade)
+  asset   Asset   @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  @@id([gallery_id, asset_id])
+  @@index([gallery_id, position]) // cursor pagination
+  @@index([asset_id])
+  @@map("gallery_assets")
+}
+
+model GalleryToken {
+  id         String    @id @default(uuid(7)) @db.Char(36)
+  gallery_id String    @db.Char(36)
+  token      String    @unique @db.VarChar(48) // nanoid(24)
+  type       TokenType @default(PRIMARY)
+
+  // "bride's family", "instagram" — tells you where traffic came from
+  label String? @db.VarChar(80)
+
+  allows_original_download Boolean @default(false)
+  allows_selections        Boolean @default(false)
+
+  expires_at DateTime?
+  is_revoked Boolean   @default(false)
+  max_uses   Int?
+  uses       Int       @default(0)
+
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  last_used_at DateTime?
+  deleted_at   DateTime? // soft delete
+
+  gallery Gallery @relation(fields: [gallery_id], references: [id], onDelete: Cascade)
+
+  sessions   GallerySession[]
+  selections Selection[]
+  downloads  Download[]
+
+  @@index([gallery_id, type])
+  @@index([is_revoked, expires_at])
+  @@map("gallery_tokens")
+}
+
+// ============================================================
+//  SELECTIONS  (the real mobile use case)
+// ============================================================
+
+model Selection {
+  id       String        @id @default(uuid(7)) @db.Char(36)
+  token_id String        @db.Char(36)
+  asset_id String        @db.Char(36)
+  type     SelectionType @default(FAVORITE)
+  note     String?       @db.VarChar(500)
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime? // soft delete
+
+  token GalleryToken @relation(fields: [token_id], references: [id], onDelete: Cascade)
+  asset Asset        @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  // Key to batched syncing: enables an idempotent upsert.
+  // If the connection drops and the client retries, nothing duplicates.
+  @@unique([token_id, asset_id])
+  @@index([asset_id, type])
+  @@map("selections")
+}
+
+// ============================================================
+//  ANALYTICS
+//
+//  Download     = server-verified (it went through URL signing). Hard data.
+//  GalleryEvent = browser-reported. Approximate, some is always lost.
+//  Keep them apart: they answer different questions.
+//
+//  session_id/gallery_id/token_id/asset_id below are UUID (Char(36)) to
+//  match the tables they reference, but `id` on GalleryEvent/Download
+//  stays BigInt autoincrement: these are the highest-volume tables in
+//  the system, and a 36-byte UUID per row is a real cost here that the
+//  lower-volume tables don't pay.
+// ============================================================
+
+model GallerySession {
+  id         String  @id @default(uuid(7)) @db.Char(36)
+  gallery_id String  @db.Char(36)
+  token_id   String? @db.Char(36)
+
+  // localStorage UUID: tells 5 people apart from 1 person reloading 5 times
+  visitor_id String @db.VarChar(40)
+
+  // sha256(ip + SALT). Never the raw IP — it is personal data (Ley 21.719).
+  ip_hash    String? @db.VarChar(64)
+  user_agent String? @db.VarChar(400)
+  referer    String? @db.VarChar(400)
+  country    String? @db.VarChar(2)
+  is_mobile  Boolean @default(false)
+
+  created_at       DateTime @default(now())
+  last_activity_at DateTime @updatedAt
+
+  gallery Gallery       @relation(fields: [gallery_id], references: [id], onDelete: Cascade)
+  token   GalleryToken? @relation(fields: [token_id], references: [id], onDelete: SetNull)
+
+  events GalleryEvent[]
+
+  @@index([gallery_id, created_at])
+  @@index([gallery_id, visitor_id]) // unique visitor count
+  @@index([created_at]) // retention job
+  @@map("gallery_sessions")
+}
+
+model GalleryEvent {
+  id          BigInt    @id @default(autoincrement()) // grows fast, kept as BigInt (see note above)
+  session_id  String    @db.Char(36)
+  type        EventType
+  asset_id    String?   @db.Char(36)
+  // Milliseconds visible (PHOTO_VIEW) or played (VIDEO_PLAY)
+  duration_ms Int?
+  created_at  DateTime  @default(now())
+
+  session GallerySession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  asset   Asset?         @relation(fields: [asset_id], references: [id], onDelete: SetNull)
+
+  @@index([session_id])
+  @@index([asset_id, type]) // "most viewed photos"
+  @@index([created_at]) // retention job
+  @@map("gallery_events")
+}
+
+model Download {
+  id         BigInt       @id @default(autoincrement()) // grows fast, kept as BigInt (see note above)
+  gallery_id String       @db.Char(36)
+  token_id   String?      @db.Char(36)
+  asset_id   String?      @db.Char(36) // null for a full ZIP
+  type       DownloadType
+
+  ip_hash    String?  @db.VarChar(64)
+  user_agent String?  @db.VarChar(400)
+  bytes      BigInt?
+  created_at DateTime @default(now())
+
+  gallery Gallery       @relation(fields: [gallery_id], references: [id], onDelete: Cascade)
+  token   GalleryToken? @relation(fields: [token_id], references: [id], onDelete: SetNull)
+  asset   Asset?        @relation(fields: [asset_id], references: [id], onDelete: SetNull)
+
+  @@index([gallery_id, created_at])
+  @@index([asset_id])
+  @@map("downloads")
+}
+
+// Permanent rollups. Lets you purge raw events after 12 months
+// without losing the historical numbers.
+model GalleryStats {
+  gallery_id String @id @db.Char(36)
+
+  unique_visitors    Int @default(0)
+  total_sessions     Int @default(0)
+  photo_views        Int @default(0)
+  original_downloads Int @default(0)
+  zip_downloads      Int @default(0)
+  total_selections   Int @default(0)
+
+  // Did the client actually open it? PRIMARY token only.
+  client_first_opened_at DateTime?
+  last_opened_at         DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  gallery Gallery @relation(fields: [gallery_id], references: [id], onDelete: Cascade)
+
+  @@map("gallery_stats")
+}
+
+// ============================================================
+//  IN-FLIGHT MULTIPART UPLOADS
+//  Without this, failed 5 GB uploads leave orphaned parts that R2
+//  bills you for and that never show up when listing the bucket.
+// ============================================================
+
+model PendingUpload {
+  id         String @id @default(uuid(7)) @db.Char(36)
+  project_id String @db.Char(36)
+  upload_id  String @db.VarChar(255)
+  key        String @db.VarChar(500)
+
+  original_filename String @db.VarChar(255)
+  size_bytes        BigInt
+  total_parts       Int?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([upload_id, key])
+  @@index([created_at]) // cleanup job for uploads older than 7 days
+  @@map("pending_uploads")
+}

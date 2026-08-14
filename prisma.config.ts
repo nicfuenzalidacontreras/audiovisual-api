@@ -9,4 +9,7 @@ export default defineConfig({
     // (`migrate`, `db push`) necesitan `DATABASE_URL` real en el entorno o en `.env`.
     url: process.env.DATABASE_URL ?? 'mysql://user:password@localhost:3306/db',
   },
+  migrations: {
+    seed: 'ts-node prisma/seed.ts',
+  },
 });
