@@ -9,6 +9,8 @@ RUN apt-get update \
 RUN npm install -g npm@11.17.0
 
 COPY package.json package-lock.json ./
+COPY prisma.config.ts ./
+COPY prisma ./prisma
 RUN npm ci
 
 COPY . .
