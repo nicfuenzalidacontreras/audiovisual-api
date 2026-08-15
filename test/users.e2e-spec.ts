@@ -29,6 +29,7 @@ describe('UsersController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, transform: true }),
     );
@@ -58,14 +59,14 @@ describe('UsersController (e2e)', () => {
 
   const createUser = (overrides: Record<string, unknown> = {}) =>
     request(app.getHttpServer())
-      .post('/users')
+      .post('/api/users')
       .send(createUserPayload(overrides))
       .expect(201);
 
   describe('GET /users', () => {
     it('returns an empty array when there are no users', async () => {
       const response = await request(app.getHttpServer())
-        .get('/users')
+        .get('/api/users')
         .expect(200);
 
       expect(response.body).toEqual([]);
@@ -76,11 +77,11 @@ describe('UsersController (e2e)', () => {
       const deleted = await createUser({ email: 'deleted@example.org' });
 
       await request(app.getHttpServer())
-        .delete(`/users/${body(deleted).id}`)
+        .delete(`/api/users/${body(deleted).id}`)
         .expect(204);
 
       const response = await request(app.getHttpServer())
-        .get('/users')
+        .get('/api/users')
         .expect(200);
       const users = bodyList(response);
 
@@ -95,7 +96,7 @@ describe('UsersController (e2e)', () => {
       const created = await createUser();
 
       const response = await request(app.getHttpServer())
-        .get(`/users/${body(created).id}`)
+        .get(`/api/users/${body(created).id}`)
         .expect(200);
 
       expect(body(response).email).toBe('jane.doe@example.org');
@@ -104,7 +105,7 @@ describe('UsersController (e2e)', () => {
 
     it('returns 404 when the user does not exist', () => {
       return request(app.getHttpServer())
-        .get('/users/00000000-0000-0000-0000-000000000000')
+        .get('/api/users/00000000-0000-0000-0000-000000000000')
         .expect(404);
     });
 
@@ -112,11 +113,11 @@ describe('UsersController (e2e)', () => {
       const created = await createUser();
 
       await request(app.getHttpServer())
-        .delete(`/users/${body(created).id}`)
+        .delete(`/api/users/${body(created).id}`)
         .expect(204);
 
       return request(app.getHttpServer())
-        .get(`/users/${body(created).id}`)
+        .get(`/api/users/${body(created).id}`)
         .expect(404);
     });
   });
@@ -140,7 +141,7 @@ describe('UsersController (e2e)', () => {
 
     it('returns 400 for invalid data', () => {
       return request(app.getHttpServer())
-        .post('/users')
+        .post('/api/users')
         .send(createUserPayload({ email: 'not-an-email', password: '123' }))
         .expect(400);
     });
@@ -149,7 +150,7 @@ describe('UsersController (e2e)', () => {
       await createUser();
 
       return request(app.getHttpServer())
-        .post('/users')
+        .post('/api/users')
         .send(createUserPayload())
         .expect(409);
     });
@@ -160,7 +161,7 @@ describe('UsersController (e2e)', () => {
       const created = await createUser();
 
       const response = await request(app.getHttpServer())
-        .patch(`/users/${body(created).id}`)
+        .patch(`/api/users/${body(created).id}`)
         .send({ name: 'Jane Updated', is_active: false })
         .expect(200);
 
@@ -170,7 +171,7 @@ describe('UsersController (e2e)', () => {
 
     it('returns 404 when the user does not exist', () => {
       return request(app.getHttpServer())
-        .patch('/users/00000000-0000-0000-0000-000000000000')
+        .patch('/api/users/00000000-0000-0000-0000-000000000000')
         .send({ name: 'x' })
         .expect(404);
     });
@@ -179,7 +180,7 @@ describe('UsersController (e2e)', () => {
       const created = await createUser();
 
       return request(app.getHttpServer())
-        .patch(`/users/${body(created).id}`)
+        .patch(`/api/users/${body(created).id}`)
         .send({ email: 'not-an-email' })
         .expect(400);
     });
@@ -189,7 +190,7 @@ describe('UsersController (e2e)', () => {
       const other = await createUser({ email: 'other@example.org' });
 
       return request(app.getHttpServer())
-        .patch(`/users/${body(other).id}`)
+        .patch(`/api/users/${body(other).id}`)
         .send({ email: 'jane.doe@example.org' })
         .expect(409);
     });
@@ -200,17 +201,17 @@ describe('UsersController (e2e)', () => {
       const created = await createUser();
 
       await request(app.getHttpServer())
-        .delete(`/users/${body(created).id}`)
+        .delete(`/api/users/${body(created).id}`)
         .expect(204);
 
       await request(app.getHttpServer())
-        .get(`/users/${body(created).id}`)
+        .get(`/api/users/${body(created).id}`)
         .expect(404);
     });
 
     it('returns 404 when the user does not exist', () => {
       return request(app.getHttpServer())
-        .delete('/users/00000000-0000-0000-0000-000000000000')
+        .delete('/api/users/00000000-0000-0000-0000-000000000000')
         .expect(404);
     });
 
@@ -218,11 +219,11 @@ describe('UsersController (e2e)', () => {
       const created = await createUser();
 
       await request(app.getHttpServer())
-        .delete(`/users/${body(created).id}`)
+        .delete(`/api/users/${body(created).id}`)
         .expect(204);
 
       return request(app.getHttpServer())
-        .delete(`/users/${body(created).id}`)
+        .delete(`/api/users/${body(created).id}`)
         .expect(404);
     });
   });
