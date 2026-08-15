@@ -1,10 +1,4 @@
-# users Specification
-
-## Purpose
-
-Gestiona el ciclo de vida de los usuarios del staff del estudio: permite listarlos, consultarlos, crearlos, editarlos y eliminarlos lógicamente a través de una API HTTP, respetando su rol y estado activo sin exponer información sensible.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Listar usuarios
 El sistema SHALL exponer un endpoint, accesible únicamente a un usuario autenticado con rol `ADMIN`, que devuelva la lista de usuarios que no han sido eliminados lógicamente, sin incluir el hash de la contraseña de ningún usuario.
