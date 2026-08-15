@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { MessageResponseDto } from './dto/message-response.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { toUserResponse } from './mappers/user-response.mapper';
@@ -73,12 +74,13 @@ export class UsersService {
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<MessageResponseDto> {
     await this.findOne(id);
     await this.prisma.user.update({
       where: { id },
       data: { deleted_at: new Date() },
     });
+    return { message: 'Usuario eliminado con éxito' };
   }
 }
 

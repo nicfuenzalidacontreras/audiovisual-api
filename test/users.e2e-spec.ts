@@ -78,7 +78,7 @@ describe('UsersController (e2e)', () => {
 
       await request(app.getHttpServer())
         .delete(`/api/users/${body(deleted).id}`)
-        .expect(204);
+        .expect(200);
 
       const response = await request(app.getHttpServer())
         .get('/api/users')
@@ -114,7 +114,7 @@ describe('UsersController (e2e)', () => {
 
       await request(app.getHttpServer())
         .delete(`/api/users/${body(created).id}`)
-        .expect(204);
+        .expect(200);
 
       return request(app.getHttpServer())
         .get(`/api/users/${body(created).id}`)
@@ -200,9 +200,11 @@ describe('UsersController (e2e)', () => {
     it('soft deletes the user and it stops appearing afterwards', async () => {
       const created = await createUser();
 
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .delete(`/api/users/${body(created).id}`)
-        .expect(204);
+        .expect(200);
+
+      expect(response.body).toEqual({ message: 'Usuario eliminado con éxito' });
 
       await request(app.getHttpServer())
         .get(`/api/users/${body(created).id}`)
@@ -220,7 +222,7 @@ describe('UsersController (e2e)', () => {
 
       await request(app.getHttpServer())
         .delete(`/api/users/${body(created).id}`)
-        .expect(204);
+        .expect(200);
 
       return request(app.getHttpServer())
         .delete(`/api/users/${body(created).id}`)

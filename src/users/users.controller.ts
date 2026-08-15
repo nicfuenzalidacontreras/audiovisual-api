@@ -3,14 +3,13 @@ import {
   Controller,
   Delete,
   Get,
-  HttpCode,
-  HttpStatus,
   Param,
   Patch,
   Post,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CreateUserDto } from './dto/create-user.dto';
+import { MessageResponseDto } from './dto/message-response.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { UsersService } from './users.service';
@@ -58,11 +57,10 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar un usuario' })
-  @ApiResponse({ status: 204, description: 'Usuario eliminado' })
+  @ApiResponse({ status: 200, type: MessageResponseDto })
   @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  remove(@Param('id') id: string): Promise<void> {
+  remove(@Param('id') id: string): Promise<MessageResponseDto> {
     return this.usersService.remove(id);
   }
 }

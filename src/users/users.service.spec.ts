@@ -215,12 +215,13 @@ describe('UsersService', () => {
         deleted_at: new Date(),
       });
 
-      await service.remove('user-1');
+      const result = await service.remove('user-1');
 
       expect(userDelegate.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { deleted_at: expect.any(Date) as Date },
       });
+      expect(result).toEqual({ message: 'Usuario eliminado con éxito' });
     });
 
     it('throws NotFoundException when the user does not exist', async () => {
