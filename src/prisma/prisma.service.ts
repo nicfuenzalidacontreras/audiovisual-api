@@ -15,7 +15,12 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    super({ adapter: new PrismaMariaDb(process.env.DATABASE_URL as string) });
+    // caching_sha2_password (default en MySQL 8) requiere esta opción para
+    // completar el handshake sin TLS; si no, el driver mariadb cuelga hasta
+    // agotar el pool en vez de fallar con un error claro.
+    const url = new URL(process.env.DATABASE_URL as string);
+    url.searchParams.set('allowPublicKeyRetrieval', 'true');
+    super({ adapter: new PrismaMariaDb(url.toString()) });
   }
 
   async onModuleInit() {
