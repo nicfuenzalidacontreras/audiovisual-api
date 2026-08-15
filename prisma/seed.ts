@@ -8,7 +8,7 @@ const prisma = new PrismaClient({
 });
 
 // Credenciales de desarrollo/demo — no usar en producción.
-const SEED_PASSWORD = 'passsword';
+const SEED_PASSWORD = 'password';
 
 const SEED_USERS: { email: string; name: string; role: UserRole }[] = [
   { email: 'admin@example.com', name: 'Administrador', role: 'ADMIN' },
@@ -22,7 +22,7 @@ async function main() {
   for (const seedUser of SEED_USERS) {
     const user = await prisma.user.upsert({
       where: { email: seedUser.email },
-      update: {},
+      update: { password },
       create: {
         email: seedUser.email,
         password,
