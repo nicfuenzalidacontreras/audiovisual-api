@@ -59,6 +59,14 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+    # El volumen anónimo de node_modules aísla las dependencias del
+    # contenedor (compiladas para Linux) de las de /app en el host, pero
+    # por eso mismo puede quedar desincronizado con package.json/package-lock.json
+    # tras un `docker compose build` (Docker reutiliza el volumen existente en
+    # vez de repoblarlo desde la imagen). El `npm ci` en cada arranque
+    # garantiza que node_modules (y el cliente de Prisma, vía postinstall)
+    # siempre coincidan con el lockfile actual, sin depender de ese volumen.
+    command: sh -c "npm ci --no-audit --no-fund && npm run start:dev"
     depends_on:
       mysql:
         condition: service_healthy

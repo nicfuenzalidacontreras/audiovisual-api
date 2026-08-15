@@ -14,6 +14,7 @@ async function bootstrap() {
     .setTitle('Audiovisual API')
     .setDescription('Documentación de la API de Audiovisual')
     .setVersion('0.0.1')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);

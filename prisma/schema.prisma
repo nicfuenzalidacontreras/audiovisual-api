@@ -96,7 +96,28 @@ model User {
   projects Project[]
   quotes   Quote[]
 
+  refresh_tokens RefreshToken[]
+
   @@map("users")
+}
+
+// ============================================================
+//  AUTH
+// ============================================================
+
+model RefreshToken {
+  id         String   @id @default(uuid(7)) @db.Char(36)
+  user_id    String   @db.Char(36)
+  token_hash String   @unique @db.VarChar(64) // sha256 del refresh token, nunca el valor en texto plano
+  expires_at DateTime
+  is_revoked Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at]) // cleanup job de tokens expirados
+  @@map("refresh_tokens")
 }
 
 // ============================================================
